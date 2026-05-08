@@ -35,7 +35,6 @@
     border-bottom: 1px solid var(--border);
   }
 
-  /* Assignment cards */
   .card { border: 1px solid var(--border); border-radius: 3px; margin-bottom: 8px; overflow: hidden; }
   .card:hover { border-color: #3a3a3a; }
   .card.late { border-color: #3a1212; background: var(--late-bg); }
@@ -60,7 +59,6 @@
 
   .empty { font-size: 0.78rem; color: var(--muted); font-style: italic; }
 
-  /* Important dates */
   .date-row {
     display: flex; justify-content: space-between; align-items: flex-start;
     padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 0.82rem;
@@ -72,9 +70,10 @@
   .date-row.past .date-title { color: var(--late); }
   .date-row.past .date-val { color: var(--late); }
 
-  /* Notes */
   .notes-content { font-size: 0.82rem; color: #999; line-height: 1.75; white-space: pre-wrap; }
   .notes-ts { font-size: 0.65rem; color: #333; margin-top: 10px; letter-spacing: 0.05em; }
+
+  .loading { font-size: 0.78rem; color: var(--muted); font-style: italic; }
 
   @media (max-width: 680px) {
     .layout { grid-template-columns: 1fr; }
@@ -93,76 +92,104 @@
   <div class="main">
     <div class="sec">
       <div class="sec-label">Active Assignments</div>
-      <div id="activeList"></div>
+      <div id="activeList"><div class="loading">Loading...</div></div>
     </div>
     <div class="sec">
       <div class="sec-label">Past Due</div>
-      <div id="lateList"></div>
+      <div id="lateList"><div class="loading">Loading...</div></div>
     </div>
   </div>
   <div class="sidebar">
     <div class="sec">
       <div class="sec-label">Important Dates</div>
-      <div id="datesList"></div>
+      <div id="datesList"><div class="loading">Loading...</div></div>
     </div>
     <div class="sec">
       <div class="sec-label">Notes</div>
-      <div class="notes-content" id="notesContent"></div>
+      <div class="notes-content" id="notesContent">Loading...</div>
       <div class="notes-ts" id="notesTs"></div>
     </div>
   </div>
 </div>
 
 <script>
-const N = 'cantu';
-const S = {
-  get(k){try{return JSON.parse(localStorage.getItem('cb_'+k))||[]}catch{return[]}},
-  getObj(k){try{return JSON.parse(localStorage.getItem('cb_'+k))||{}}catch{return{}}},
-  late(d){const x=new Date(d+'T23:59:59');return new Date()>x},
-  fmt(s){if(!s)return'';return new Date(s+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
-};
+  // ── CONFIGURATION ──────────────────────────────────────────────
+  const BIN_ID  = 'YOUR_BIN_ID_HERE';   // paste your JSONBin bin ID
+  const API_KEY = 'YOUR_ACCESS_KEY_HERE'; // paste your JSONBin access key
+  // ───────────────────────────────────────────────────────────────
 
-function toggleCard(head) {
-  head.classList.toggle('expanded');
-  head.nextElementSibling.classList.toggle('open');
-}
+  function isLate(d) {
+    return new Date() > new Date(d + 'T23:59:59');
+  }
 
-function cardHTML(a, late) {
-  return `<div class="card${late?' late':''}">
-    <div class="card-head" onclick="toggleCard(this)">
-      <span class="card-name">${esc(a.title)}</span>
-      <span class="card-right">
-        <span class="due-pill">${S.fmt(a.dueDate)}</span>
-        <span class="dot"></span>
-        <span class="chevron">▾</span>
-      </span>
-    </div>
-    <div class="card-body">${esc(a.description)||'<em style="color:#444">No description added.</em>'}</div>
-  </div>`;
-}
+  function fmt(s) {
+    if (!s) return '';
+    return new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
 
-function esc(s){ if(!s)return''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+  function esc(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
 
-function render() {
-  const all = S.get(N+'_assignments');
-  const active = all.filter(a=>!S.late(a.dueDate));
-  const late = all.filter(a=>S.late(a.dueDate));
-  document.getElementById('activeList').innerHTML = active.length ? active.map(a=>cardHTML(a,false)).join('') : '<div class="empty">No active assignments.</div>';
-  document.getElementById('lateList').innerHTML = late.length ? late.map(a=>cardHTML(a,true)).join('') : '<div class="empty">Nothing past due.</div>';
+  function toggleCard(head) {
+    head.classList.toggle('expanded');
+    head.nextElementSibling.classList.toggle('open');
+  }
+  window.toggleCard = toggleCard;
 
-  const dates = S.get(N+'_dates');
-  const dEl = document.getElementById('datesList');
-  dEl.innerHTML = dates.length ? dates.map(d=>`<div class="date-row${S.late(d.date)?' past':''}">
-    <div><div class="date-title">${esc(d.title)}</div>${d.note?`<div class="date-note">${esc(d.note)}</div>`:''}</div>
-    <div class="date-val">${S.fmt(d.date)}</div>
-  </div>`).join('') : '<div class="empty">No dates posted.</div>';
+  function cardHTML(a, late) {
+    return `<div class="card${late ? ' late' : ''}">
+      <div class="card-head" onclick="toggleCard(this)">
+        <span class="card-name">${esc(a.title)}</span>
+        <span class="card-right">
+          <span class="due-pill">${fmt(a.dueDate)}</span>
+          <span class="dot"></span>
+          <span class="chevron">▾</span>
+        </span>
+      </div>
+      <div class="card-body">${esc(a.description) || '<em style="color:#444">No description added.</em>'}</div>
+    </div>`;
+  }
 
-  const notes = S.getObj(N+'_notes');
-  document.getElementById('notesContent').textContent = notes.content || 'No notes yet.';
-  document.getElementById('notesTs').textContent = notes.ts ? 'Updated '+notes.ts : '';
-}
+  async function render() {
+    try {
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+        headers: { 'X-Access-Key': API_KEY }
+      });
+      const json = await res.json();
+      const data = json.record;
 
-render();
+      const assignments = data.assignments || [];
+      const active = assignments.filter(a => !isLate(a.dueDate));
+      const late   = assignments.filter(a =>  isLate(a.dueDate));
+
+      document.getElementById('activeList').innerHTML =
+        active.length ? active.map(a => cardHTML(a, false)).join('') : '<div class="empty">No active assignments.</div>';
+      document.getElementById('lateList').innerHTML =
+        late.length ? late.map(a => cardHTML(a, true)).join('') : '<div class="empty">Nothing past due.</div>';
+
+      const dates = data.dates || [];
+      document.getElementById('datesList').innerHTML = dates.length
+        ? dates.map(d => `<div class="date-row${isLate(d.date) ? ' past' : ''}">
+            <div><div class="date-title">${esc(d.title)}</div>${d.note ? `<div class="date-note">${esc(d.note)}</div>` : ''}</div>
+            <div class="date-val">${fmt(d.date)}</div>
+          </div>`).join('')
+        : '<div class="empty">No dates posted.</div>';
+
+      const notes = data.notes || {};
+      document.getElementById('notesContent').textContent = notes.content || 'No notes yet.';
+      document.getElementById('notesTs').textContent = notes.ts ? 'Updated ' + notes.ts : '';
+
+    } catch (e) {
+      console.error(e);
+      document.getElementById('activeList').innerHTML = '<div class="empty">Could not load data.</div>';
+    }
+  }
+
+  render();
 </script>
 </body>
 </html>

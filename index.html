@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MR. Cantu — Class Board</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0a; --surface: #111; --surface2: #1a1a1a;
+    --border: #2a2a2a; --text: #e8e8e8; --muted: #555;
+    --late: #c0392b; --late-bg: #180808;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; min-height: 100vh; }
+
+  header {
+    border-bottom: 1px solid var(--border); padding: 26px 40px;
+    display: flex; align-items: baseline; justify-content: space-between;
+    position: sticky; top: 0; background: var(--bg); z-index: 10;
+  }
+  header h1 { font-size: 0.9rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; }
+  header span { font-size: 0.68rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .layout {
+    display: grid; grid-template-columns: 1fr 290px;
+    min-height: calc(100vh - 65px);
+  }
+  .main { padding: 40px; border-right: 1px solid var(--border); }
+  .sidebar { padding: 36px 28px; }
+
+  .sec { margin-bottom: 48px; }
+  .sec-label {
+    font-size: 0.6rem; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 16px; padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Assignment cards */
+  .card { border: 1px solid var(--border); border-radius: 3px; margin-bottom: 8px; overflow: hidden; }
+  .card:hover { border-color: #3a3a3a; }
+  .card.late { border-color: #3a1212; background: var(--late-bg); }
+  .card-head {
+    padding: 13px 16px; display: flex; align-items: center;
+    justify-content: space-between; cursor: pointer; user-select: none;
+  }
+  .card-head:hover { background: rgba(255,255,255,0.02); }
+  .card-name { font-size: 0.86rem; font-weight: 500; }
+  .card-right { display: flex; align-items: center; gap: 10px; }
+  .due-pill {
+    font-size: 0.65rem; letter-spacing: 0.07em; text-transform: uppercase;
+    background: #1a1a1a; color: var(--muted); padding: 3px 8px; border-radius: 2px;
+  }
+  .card.late .due-pill { background: #2a0808; color: var(--late); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: #fff; flex-shrink: 0; }
+  .card.late .dot { background: var(--late); }
+  .chevron { font-size: 0.7rem; color: var(--muted); transition: transform 0.2s; }
+  .card-body { display: none; padding: 12px 16px 14px; border-top: 1px solid var(--border); font-size: 0.82rem; color: #999; line-height: 1.7; white-space: pre-wrap; }
+  .card-body.open { display: block; }
+  .card-head.expanded .chevron { transform: rotate(180deg); }
+
+  .empty { font-size: 0.78rem; color: var(--muted); font-style: italic; }
+
+  /* Important dates */
+  .date-row {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 0.82rem;
+  }
+  .date-row:last-child { border-bottom: none; }
+  .date-title { font-weight: 500; }
+  .date-note { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+  .date-val { font-size: 0.7rem; color: var(--muted); white-space: nowrap; margin-left: 12px; text-align: right; }
+  .date-row.past .date-title { color: var(--late); }
+  .date-row.past .date-val { color: var(--late); }
+
+  /* Notes */
+  .notes-content { font-size: 0.82rem; color: #999; line-height: 1.75; white-space: pre-wrap; }
+  .notes-ts { font-size: 0.65rem; color: #333; margin-top: 10px; letter-spacing: 0.05em; }
+
+  @media (max-width: 680px) {
+    .layout { grid-template-columns: 1fr; }
+    .main { border-right: none; border-bottom: 1px solid var(--border); padding: 24px 18px; }
+    .sidebar { padding: 24px 18px; }
+    header { padding: 18px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Ms. Cantu</h1>
+  <span>Class Board</span>
+</header>
+<div class="layout">
+  <div class="main">
+    <div class="sec">
+      <div class="sec-label">Active Assignments</div>
+      <div id="activeList"></div>
+    </div>
+    <div class="sec">
+      <div class="sec-label">Past Due</div>
+      <div id="lateList"></div>
+    </div>
+  </div>
+  <div class="sidebar">
+    <div class="sec">
+      <div class="sec-label">Important Dates</div>
+      <div id="datesList"></div>
+    </div>
+    <div class="sec">
+      <div class="sec-label">Notes</div>
+      <div class="notes-content" id="notesContent"></div>
+      <div class="notes-ts" id="notesTs"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const N = 'cantu';
+const S = {
+  get(k){try{return JSON.parse(localStorage.getItem('cb_'+k))||[]}catch{return[]}},
+  getObj(k){try{return JSON.parse(localStorage.getItem('cb_'+k))||{}}catch{return{}}},
+  late(d){const x=new Date(d+'T23:59:59');return new Date()>x},
+  fmt(s){if(!s)return'';return new Date(s+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}
+};
+
+function toggleCard(head) {
+  head.classList.toggle('expanded');
+  head.nextElementSibling.classList.toggle('open');
+}
+
+function cardHTML(a, late) {
+  return `<div class="card${late?' late':''}">
+    <div class="card-head" onclick="toggleCard(this)">
+      <span class="card-name">${esc(a.title)}</span>
+      <span class="card-right">
+        <span class="due-pill">${S.fmt(a.dueDate)}</span>
+        <span class="dot"></span>
+        <span class="chevron">▾</span>
+      </span>
+    </div>
+    <div class="card-body">${esc(a.description)||'<em style="color:#444">No description added.</em>'}</div>
+  </div>`;
+}
+
+function esc(s){ if(!s)return''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function render() {
+  const all = S.get(N+'_assignments');
+  const active = all.filter(a=>!S.late(a.dueDate));
+  const late = all.filter(a=>S.late(a.dueDate));
+  document.getElementById('activeList').innerHTML = active.length ? active.map(a=>cardHTML(a,false)).join('') : '<div class="empty">No active assignments.</div>';
+  document.getElementById('lateList').innerHTML = late.length ? late.map(a=>cardHTML(a,true)).join('') : '<div class="empty">Nothing past due.</div>';
+
+  const dates = S.get(N+'_dates');
+  const dEl = document.getElementById('datesList');
+  dEl.innerHTML = dates.length ? dates.map(d=>`<div class="date-row${S.late(d.date)?' past':''}">
+    <div><div class="date-title">${esc(d.title)}</div>${d.note?`<div class="date-note">${esc(d.note)}</div>`:''}</div>
+    <div class="date-val">${S.fmt(d.date)}</div>
+  </div>`).join('') : '<div class="empty">No dates posted.</div>';
+
+  const notes = S.getObj(N+'_notes');
+  document.getElementById('notesContent').textContent = notes.content || 'No notes yet.';
+  document.getElementById('notesTs').textContent = notes.ts ? 'Updated '+notes.ts : '';
+}
+
+render();
+</script>
+</body>
+</html>
